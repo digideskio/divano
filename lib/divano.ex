@@ -1,19 +1,34 @@
 defmodule Divano do
-  use Application
+  @default_opts [
+    host: "localhost",
+    port: 5984,
+    scheme: "http",
+    database: ""
+  ]
 
-  # See http://elixir-lang.org/docs/stable/elixir/Application.html
-  # for more information on OTP Applications
-  def start(_type, _args) do
+  def start_link(server, database, opts) do
+    server_opts = parse_url(server)
+    opts = Keyword.merge(opts, server_opts)
+    start_link(database, opts)
+  end
+
+  def start_link(database) do
+    start_link(database, [])
+  end
+
+  def start_link(database, opts) when is_list(opts) do
     import Supervisor.Spec, warn: false
 
     children = [
-      # Define workers and child supervisors to be supervised
-      # worker(Divano.Worker, [arg1, arg2, arg3])
+      worker(Divano.Connection, [database, Keyword.merge(@default_opts, opts)])
     ]
 
-    # See http://elixir-lang.org/docs/stable/elixir/Supervisor.html
-    # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Divano.Supervisor]
     Supervisor.start_link(children, opts)
+  end
+
+  defp parse_url(server_url) do
+    uri = URI.parse(server_url)
+    [host: uri.host, port: uri.port, scheme: uri.scheme]
   end
 end
