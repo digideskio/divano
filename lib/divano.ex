@@ -27,6 +27,25 @@ defmodule Divano do
     Supervisor.start_link(children, opts)
   end
 
+  def server_info(pid) do
+    GenServer.call(pid, :server_info)
+  end
+
+  def save_doc(pid, id, attributes \\ [], opts \\ []) do
+    attributes = {[{"_id", id} | Enum.to_list(attributes)]}
+    GenServer.call(pid, {:save_doc, attributes, opts})
+  end
+
+  def open_doc(pid, id, opts \\ []) do
+    {:ok, {doc}} = GenServer.call(pid, {:open_doc, id, opts})
+    Enum.into(doc, %{})
+  end
+
+  def delete_doc(pid, id, opts \\ []) do
+    {:ok, doc} = GenServer.call(pid, {:open_doc, id, []})
+    GenServer.call(pid, {:delete_doc, doc, opts})
+  end
+
   defp parse_url(server_url) do
     uri = URI.parse(server_url)
     [host: uri.host, port: uri.port, scheme: uri.scheme]
