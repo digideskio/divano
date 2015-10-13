@@ -1,6 +1,6 @@
 defmodule Divano do
 
-  def start_link(database_url, opts) do
+  def start_link(database_url, opts \\ []) do
     url_opts = database_url |> parse_url
     database_url = "#{url_opts[:scheme]}://#{url_opts[:host]}:#{url_opts[:port]}"
     database_name = db_name(url_opts[:path])
@@ -23,20 +23,38 @@ defmodule Divano do
 
   def save_doc(pid, id, attributes \\ [], opts \\ []) do
     database = Agent.get(pid, fn state -> state[:database] end)
-    attributes = {[{"_id", id} | Enum.to_list(attributes)]}
-    :couchbeam.save_doc(database, attributes, opts)
+    doc = map_to_doc(id, attributes)
+    case :couchbeam.save_doc(database, doc, opts) do
+      {:ok, doc} -> {:ok, doc_to_map(doc)}
+           error -> error
+    end
   end
 
   def open_doc(pid, id, opts \\ []) do
     database = Agent.get(pid, fn state -> state[:database] end)
-    {:ok, {doc}} = :couchbeam.open_doc(database, id, opts)
-    Enum.into(doc, %{})
+    case :couchbeam.open_doc(database, id, opts) do
+      {:ok, doc} -> {:ok, doc_to_map(doc)}
+           error -> error
+    end
   end
 
   def delete_doc(pid, id, opts \\ []) do
     database = Agent.get(pid, fn state -> state[:database] end)
-    {:ok, doc} = :couchbeam.open_doc(database, id, [])
-    :couchbeam.delete_doc(database, doc, opts)
+    case :couchbeam.open_doc(database, id, []) do
+      {:ok, doc} -> case :couchbeam.delete_doc(database, doc, opts) do
+        {:ok, _} -> :ok
+           error -> error
+      end
+           error -> error
+    end
+  end
+
+  defp doc_to_map({doc}) do
+    Enum.into(doc, %{})
+  end
+
+  defp map_to_doc(id, map) do
+    {[{"_id", id} | Enum.to_list(map)]}
   end
 
   defp parse_url(server_url) do
