@@ -1,53 +1,50 @@
 defmodule Divano do
-  @default_opts [
-    host: "localhost",
-    port: 5984,
-    scheme: "http",
-    database: ""
-  ]
 
-  def start_link(server, database, opts) do
-    server_opts = parse_url(server)
-    opts = Keyword.merge(opts, server_opts)
-    start_link(database, opts)
-  end
+  def start_link(database_url, opts) do
+    url_opts = database_url |> parse_url
+    database_url = "#{url_opts[:scheme]}://#{url_opts[:host]}:#{url_opts[:port]}"
+    database_name = db_name(url_opts[:path])
 
-  def start_link(database) do
-    start_link(database, [])
-  end
+    server = :couchbeam.server_connection(database_url, opts)
 
-  def start_link(database, opts) when is_list(opts) do
-    import Supervisor.Spec, warn: false
-
-    children = [
-      worker(Divano.Connection, [database, Keyword.merge(@default_opts, opts)])
-    ]
-
-    opts = [strategy: :one_for_one, name: Divano.Supervisor]
-    Supervisor.start_link(children, opts)
+    if database_name do
+      couchbeam_opts = opts[:couchbeam_options] || []
+      {:ok, database} = :couchbeam.open_or_create_db(server, database_name, couchbeam_opts)
+      Agent.start_link(fn -> %{server: server, database: database} end, opts)
+    else
+      Agent.start_link(fn -> %{server: server} end, opts)
+    end
   end
 
   def server_info(pid) do
-    GenServer.call(pid, :server_info)
+    server = Agent.get(pid, fn state -> state[:server] end)
+    :couchbeam.server_info(server)
   end
 
   def save_doc(pid, id, attributes \\ [], opts \\ []) do
+    database = Agent.get(pid, fn state -> state[:database] end)
     attributes = {[{"_id", id} | Enum.to_list(attributes)]}
-    GenServer.call(pid, {:save_doc, attributes, opts})
+    :couchbeam.save_doc(database, attributes, opts)
   end
 
   def open_doc(pid, id, opts \\ []) do
-    {:ok, {doc}} = GenServer.call(pid, {:open_doc, id, opts})
+    database = Agent.get(pid, fn state -> state[:database] end)
+    {:ok, {doc}} = :couchbeam.open_doc(database, id, opts)
     Enum.into(doc, %{})
   end
 
   def delete_doc(pid, id, opts \\ []) do
-    {:ok, doc} = GenServer.call(pid, {:open_doc, id, []})
-    GenServer.call(pid, {:delete_doc, doc, opts})
+    database = Agent.get(pid, fn state -> state[:database] end)
+    {:ok, doc} = :couchbeam.open_doc(database, id, [])
+    :couchbeam.delete_doc(database, doc, opts)
   end
 
   defp parse_url(server_url) do
     uri = URI.parse(server_url)
-    [host: uri.host, port: uri.port, scheme: uri.scheme]
+    [host: uri.host, port: uri.port, scheme: uri.scheme, path: uri.path]
   end
+
+  defp db_name(nil), do: nil
+  defp db_name("/"), do: nil
+  defp db_name("/" <> db), do: db
 end
