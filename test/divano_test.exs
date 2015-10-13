@@ -2,11 +2,13 @@ defmodule DivanoTest do
   use ExUnit.Case
 
   setup_all do
-    # Delete existing database before of start tests
-    server = :couchbeam.server_connection("http://localhost:5984", [])
-    :couchbeam.delete_db(server, "divanotest")
-
     Divano.start_link("http://localhost:5984/divanotest", name: :divano_test)
+
+    on_exit fn ->
+      server = :couchbeam.server_connection("http://localhost:5984", [])
+      :couchbeam.delete_db(server, "divanotest")
+    end
+
     :ok
   end
 
@@ -36,6 +38,10 @@ defmodule DivanoTest do
 
     assert "Guillermo Iguaran" == doc["name"]
     assert "guilleiguaran" == doc["username"]
+
+    {:ok, doc} = Divano.save_doc(:divano_test, "user-1", Map.put(doc, "username", "guille"))
+
+    assert "guille" == doc["username"]
   end
 
   test "open_doc" do

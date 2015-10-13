@@ -49,12 +49,17 @@ defmodule Divano do
     end
   end
 
-  defp doc_to_map({doc}) do
-    Enum.into(doc, %{})
+  defp doc_to_map({attrs}) do
+    Enum.into(attrs, %{})
   end
 
   defp map_to_doc(id, map) do
-    {[{"_id", id} | Enum.to_list(map)]}
+    attrs = if Map.has_key?(map, "_id") do
+      Enum.to_list(map)
+    else
+      [{"_id", id} | Map.to_list(map)]
+    end
+    {attrs}
   end
 
   defp parse_url(server_url) do
