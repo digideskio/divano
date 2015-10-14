@@ -50,17 +50,40 @@ defmodule Divano do
   end
 
   defp doc_to_map({attrs}) do
-    Enum.into(attrs, %{})
+    kwlist_to_map(attrs)
   end
 
   defp map_to_doc(id, map) do
     attrs = if Map.has_key?(map, "_id") do
-      Enum.to_list(map)
+      map_to_kwlist(map)
     else
-      [{"_id", id} | Map.to_list(map)]
+      [{"_id", id} | map_to_kwlist(map)]
     end
     {attrs}
   end
+
+  defp kwlist_to_map(kwlist) when is_list(kwlist) and length(kwlist) > 0 do
+    case kwlist |> List.first do
+      {_, _} ->
+        Enum.reduce(kwlist, %{}, fn(tuple, acc) ->
+          {key, value} = tuple
+          Map.put(acc, key, kwlist_to_map(value))
+        end)
+      _ ->
+        kwlist
+    end
+  end
+
+  defp kwlist_to_map(value), do: value
+
+  defp map_to_kwlist(map) when is_map(map) do
+    Enum.reduce(map, [], fn(tuple, acc) ->
+      {key, value} = tuple
+      [{key, map_to_kwlist(value)} | acc]
+    end)
+  end
+
+  defp map_to_kwlist(value), do: value
 
   defp parse_url(server_url) do
     uri = URI.parse(server_url)
